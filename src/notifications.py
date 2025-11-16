@@ -1,6 +1,6 @@
 import logging
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Dict, Any, Optional
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -10,10 +10,10 @@ class NotificationService:
     """Handle Slack notifications for appointment availability."""
 
     def __init__(
-        self,
-        slack_token: Optional[str] = None,
-        slack_channel_id: Optional[str] = None,
-        enabled: bool = True
+            self,
+            slack_token: Optional[str] = None,
+            slack_channel_id: Optional[str] = None,
+            enabled: bool = True
     ):
         """
         Initialize notification service.

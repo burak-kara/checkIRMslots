@@ -75,8 +75,13 @@ Note: You'll need to manually update cookies when they expire. See "Getting Sess
 
 **Appointment Parameters**:
 - `EXAM_TYPE_ID` - The type of medical exam (e.g., "3374")
-- `EXAM_ID` - Specific exam identifier (e.g., "56794")
+- **Exam Selection** (choose one):
+  - `EXAM_ID` - Direct exam identifier (e.g., "56796")
+  - `EXAM_NAME` - Auto-resolve from name (e.g., "IRM pied / cheville")
 - `PATIENT_BIRTH_DATE` - Patient birth date in ISO format (e.g., "1979-04-18T22:00:00.000+02:00")
+- **Location Filtering** (optional):
+  - `OFFICE_PLACE_IDS` - Direct location ID (e.g., "1390")
+  - `LOCATION_NAME` - Auto-resolve from name (e.g., "CANOPIA")
 
 ### Optional Settings
 

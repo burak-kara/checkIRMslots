@@ -25,6 +25,11 @@ This is a Python application that monitors appointment availability on easydoct.
 - **`src/notifications.py`**: Notification handling module
   - `NotificationService` class: Handles Slack notifications via API with formatted messages
 
+- **`src/resolver.py`**: Automatic ID resolution module
+  - `ExamResolver` class: Resolves exam IDs and location IDs from user-friendly names
+  - `get_exam_id()` method: Fetches available exams and matches by name
+  - `get_location_id()` method: Fetches available locations and matches by name
+
 The application flow:
 1. Parses command-line arguments (--debug flag)
 2. Loads configuration from `.env` file

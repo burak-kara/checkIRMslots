@@ -10,8 +10,9 @@ from typing import Optional, Dict, Any, List
 import requests
 from dotenv import load_dotenv
 
+from auth import get_session_cookies
 from notifications import NotificationService
-from auth import get_session_cookies, SessionCookies
+from resolver import ExamResolver
 
 
 @dataclass
@@ -37,6 +38,14 @@ class Config:
 
     # Notification Configuration
     notifications_enabled: bool
+
+    # Optional Fields (with defaults)
+    # Auto-resolution Parameters
+    exam_name: Optional[str] = None
+    location_name: Optional[str] = None
+    office_place_ids: Optional[str] = None
+
+    # Notification tokens
     slack_token: Optional[str] = None
     slack_channel_id: Optional[str] = None
 
@@ -61,9 +70,23 @@ class Config:
         always_required = {
             'API_URL': 'api_url',
             'EXAM_TYPE_ID': 'exam_type_id',
-            'EXAM_ID': 'exam_id',
             'PATIENT_BIRTH_DATE': 'patient_birth_date',
         }
+
+        # Exam ID can be provided directly or resolved from name
+        exam_id = os.getenv('EXAM_ID')
+        exam_name = os.getenv('EXAM_NAME')
+
+        if not exam_id and not exam_name:
+            raise ValueError("Either EXAM_ID or EXAM_NAME must be provided")
+
+        # Location can be provided directly or resolved from name
+        location_name = os.getenv('LOCATION_NAME')
+        office_place_ids = os.getenv('OFFICE_PLACE_IDS')
+
+        # Store exam_name and location_name for potential resolution
+        config_dict['exam_name'] = exam_name
+        config_dict['location_name'] = location_name
 
         # Conditionally required fields
         if auto_login_enabled:
@@ -115,6 +138,34 @@ class Config:
         config_dict['slack_token'] = os.getenv('SLACK_TOKEN')
         config_dict['slack_channel_id'] = os.getenv('SLACK_CHANNEL_ID')
 
+        # Resolve exam ID if needed
+        if exam_name and not exam_id:
+            logger = logging.getLogger(__name__)
+            logger.info(f"Resolving exam ID from name: '{exam_name}'")
+            resolved_id = ExamResolver.get_exam_id(config_dict['exam_type_id'], exam_name)
+            if not resolved_id:
+                raise ValueError(f"Could not resolve exam ID for exam name: '{exam_name}'")
+            exam_id = resolved_id
+            logger.info(f"Resolved exam ID: {exam_id}")
+
+        config_dict['exam_id'] = exam_id
+
+        # Resolve location ID if needed
+        if location_name and not office_place_ids:
+            logger = logging.getLogger(__name__)
+            logger.info(f"Resolving location ID from name: '{location_name}'")
+            resolved_loc = ExamResolver.get_location_id(
+                config_dict['exam_type_id'],
+                exam_id,
+                location_name
+            )
+            if not resolved_loc:
+                raise ValueError(f"Could not resolve location ID for location name: '{location_name}'")
+            office_place_ids = resolved_loc
+            logger.info(f"Resolved location ID: {office_place_ids}")
+
+        config_dict['office_place_ids'] = office_place_ids
+
         return cls(**config_dict)
 
     def get_headers(self) -> Dict[str, str]:
@@ -150,7 +201,7 @@ class Config:
             "examId": self.exam_id,
             "examSetId": None,
             "practitionerId": None,
-            "officePlaceIds": None,
+            "officePlaceIds": self.office_place_ids,
             "isMobileView": None,
             "patientBirthDate": self.patient_birth_date,
             "officePlaceHubId": None
@@ -191,8 +242,7 @@ class IRMSlotChecker:
             cookies = get_session_cookies(
                 email=self.config.easydoct_email,
                 password=self.config.easydoct_password,
-                exam_url=self.config.exam_url,
-                headless=True
+                exam_url=self.config.exam_url
             )
 
             if cookies and cookies.is_valid():
@@ -365,11 +415,11 @@ def main() -> None:
         # Perform initial login if auto-login is enabled and cookies not valid
         # Check for placeholder values or missing cookies
         has_valid_cookies = (
-            config.session_key and
-            config.user_session_key and
-            config.aspnet_cookies and
-            config.session_key != 'your_session_key_here' and
-            config.aspnet_cookies != 'your_aspnet_cookies_here'
+                config.session_key and
+                config.user_session_key and
+                config.aspnet_cookies and
+                config.session_key != 'your_session_key_here' and
+                config.aspnet_cookies != 'your_aspnet_cookies_here'
         )
 
         if config.auto_login_enabled and not has_valid_cookies:

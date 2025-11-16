@@ -1,8 +1,7 @@
 import logging
 import re
-import time
-from typing import Optional, Dict
 from dataclasses import dataclass
+from typing import Optional, Dict
 
 import requests
 
@@ -55,9 +54,9 @@ class EasydoctAuthenticator:
             }
 
             self.logger.debug(f"Extracted ViewState fields: "
-                            f"VIEWSTATE={len(fields['__VIEWSTATE'])} chars, "
-                            f"GENERATOR={fields['__VIEWSTATEGENERATOR']}, "
-                            f"EVENTVALIDATION={len(fields['__EVENTVALIDATION'])} chars")
+                              f"VIEWSTATE={len(fields['__VIEWSTATE'])} chars, "
+                              f"GENERATOR={fields['__VIEWSTATEGENERATOR']}, "
+                              f"EVENTVALIDATION={len(fields['__EVENTVALIDATION'])} chars")
 
             return fields
 
@@ -77,7 +76,7 @@ class EasydoctAuthenticator:
         """
         return {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                         '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                          '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'fr,en-US;q=0.7,en;q=0.3',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -235,10 +234,9 @@ class EasydoctAuthenticator:
 
 
 def get_session_cookies(
-    email: str,
-    password: str,
-    exam_url: str,
-    headless: bool = True  # Keep parameter for compatibility, but unused
+        email: str,
+        password: str,
+        exam_url: str,
 ) -> Optional[SessionCookies]:
     """
     Convenience function to get session cookies via automated API-based login.
@@ -247,7 +245,6 @@ def get_session_cookies(
         email: User email for easydoct.com
         password: User password
         exam_url: Direct URL to the exam booking page
-        headless: Unused (kept for backward compatibility)
 
     Returns:
         SessionCookies object if successful, None otherwise
