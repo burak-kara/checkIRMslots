@@ -8,24 +8,33 @@ This is a Python application that monitors appointment availability on easydoct.
 
 ## Architecture
 
-**Two-file application** with clear separation of concerns:
+**Three-module application** in `src/` directory with clear separation of concerns:
 
-- **`IRMslots.py`**: Main application file
-  - `Config` class: Dataclass that loads and validates configuration from environment variables
-  - `IRMSlotChecker` class: Main application logic for checking availability
+- **`src/main.py`**: Main application file
+  - `Config` class: Dataclass that loads and validates configuration from environment variables (supports both auto-login and manual cookie modes)
+  - `IRMSlotChecker` class: Main application logic for checking availability with automatic session refresh
   - `setup_logging()` function: Configures logging to both console and file
-  - `main()` function: Entry point with error handling
+  - `parse_args()` function: Command-line argument parsing (--debug flag)
+  - `main()` function: Entry point with error handling and initial login
 
-- **`notifications.py`**: Notification handling module
-  - `NotificationService` class: Handles Slack notifications via webhooks with formatted messages
+- **`src/auth.py`**: Authentication and session management module
+  - `SessionCookies` dataclass: Container for session cookies
+  - `EasydoctAuthenticator` class: Handles automated API-based login with ASP.NET ViewState extraction
+  - `get_session_cookies()` function: Convenience function for automated login
+
+- **`src/notifications.py`**: Notification handling module
+  - `NotificationService` class: Handles Slack notifications via API with formatted messages
 
 The application flow:
-1. Loads configuration from `.env` file
-2. Sets up logging (both console and file)
-3. Makes authenticated POST requests to `https://www.easydoct.com/api/rdv/getRdvDayAvailabilities`
-4. Checks the response for `availabilityCount > 0`
-5. Sends Slack notification if slots are found
-6. Runs in an infinite loop until availability is detected or interrupted
+1. Parses command-line arguments (--debug flag)
+2. Loads configuration from `.env` file
+3. Performs automated login if enabled and cookies not present
+4. Sets up logging (both console and file)
+5. Makes authenticated POST requests to `https://www.easydoct.com/api/rdv/getRdvDayAvailabilities`
+6. Automatically refreshes session on 401/403 errors (if auto-login enabled)
+7. Checks the response for `availabilityCount > 0`
+8. Sends Slack notification if slots are found
+9. Runs in an infinite loop until availability is detected or interrupted
 
 ## Setup and Configuration
 
@@ -43,8 +52,15 @@ cp .env.example .env
 
 **3. Edit `.env` file with your settings:**
 
-Required variables:
-- `SESSION_KEY`, `USER_SESSION_KEY`, `ASPNET_COOKIES`: Obtain from browser session on easydoct.com
+Authentication mode (choose one):
+- **Auto-login mode** (recommended): Set `AUTO_LOGIN_ENABLED=true`
+  - Requires: `EASYDOCT_EMAIL`, `EASYDOCT_PASSWORD`, `EXAM_URL`
+  - Cookies are auto-generated and refreshed automatically
+- **Manual cookie mode**: Set `AUTO_LOGIN_ENABLED=false`
+  - Requires: `SESSION_KEY`, `USER_SESSION_KEY`, `ASPNET_COOKIES`
+  - Must manually update cookies when they expire
+
+Always required variables:
 - `EXAM_TYPE_ID`, `EXAM_ID`: Specific to the appointment type you're monitoring
 - `PATIENT_BIRTH_DATE`: Patient information in ISO format
 
@@ -59,14 +75,14 @@ Optional variables:
 
 **Normal mode:**
 ```bash
-python IRMslots.py
+python src/main.py
 ```
 
 **Debug mode (verbose logging):**
 ```bash
-python IRMslots.py --debug
+python src/main.py --debug
 # or use short form:
-python IRMslots.py -d
+python src/main.py -d
 ```
 
 **Command-line options:**
@@ -85,6 +101,37 @@ The script will:
 - Configuration loading process
 - Internal state changes
 - Detailed error traces
+
+## Debug Utilities
+
+The `src/debug/` directory contains debugging tools for troubleshooting authentication issues:
+
+**`src/debug/debug_page.py`** - Page structure inspector (Optional):
+```bash
+python src/debug/debug_page.py
+```
+
+This optional script helps inspect page structure for debugging purposes by:
+- Opening easydoct.com pages in Chrome browser (requires Selenium + Chrome)
+- Searching for login form elements (email, password, submit button)
+- Listing all forms and input fields with their IDs, names, and types
+- Saving page source HTML to `src/debug/page_source.html`
+- Saving screenshot to `src/debug/page_screenshot.png`
+- Displaying current cookies
+
+**Note:** This is purely for manual debugging/inspection. The main application does NOT require Selenium or Chrome - it uses API-based login.
+
+**When to use:**
+- Need to manually inspect page structure changes
+- Verifying form field names after site updates
+- Visual inspection of page layout
+- Analyzing ViewState or cookie behavior
+
+**Output files:**
+- `src/debug/page_source.html` - Full HTML source for manual inspection
+- `src/debug/page_screenshot.png` - Visual screenshot of the page
+
+These files are automatically ignored by git.
 
 ## Slack Notification Setup
 
@@ -140,24 +187,44 @@ The Slack message includes:
 - Missing or invalid configuration
 - Network/API failures
 - Notification delivery failures
+- Authentication errors with automatic session refresh
 
 **Modular Design**:
-- Notifications are separated into their own module (`notifications.py`)
-- Easy to extend with additional notification methods
-- Clean separation between business logic and notification logic
+- Authentication separated into `auth.py` module
+  - API-based login using requests library
+  - ASP.NET ViewState extraction for form authentication
+  - Automatic cookie extraction and management
+  - Lightweight, no browser dependencies
+- Notifications separated into `notifications.py` module
+  - Slack API integration with formatted messages
+  - Easy to extend with additional notification methods
+- Clean separation between business logic, authentication, and notifications
+
+**Automated Session Management**:
+- Initial login performed automatically if cookies not present
+- Automatic re-login on 401/403 authentication errors
+- Session cookies updated in Config after successful login
+- Prevents manual cookie extraction and maintenance
 
 **Key Classes and Methods**:
-- `Config.from_env()` - Load configuration from environment
+- `Config.from_env()` - Load configuration from environment (supports both auth modes)
 - `Config.get_headers()` - Build authenticated request headers
 - `Config.get_payload()` - Build request payload with current date
+- `EasydoctAuthenticator.login()` - Perform automated API-based login with ViewState handling
+- `EasydoctAuthenticator._extract_viewstate_fields()` - Extract ASP.NET ViewState fields from HTML
+- `EasydoctAuthenticator._extract_cookies()` - Extract session cookies from requests session
+- `get_session_cookies()` - Convenience function for automated login
 - `NotificationService.send()` - Send Slack notification
-- `IRMSlotChecker.check_availability()` - Check for slots
+- `IRMSlotChecker._perform_auto_login()` - Perform auto-login and update cookies
+- `IRMSlotChecker.check_availability()` - Check for slots with auto-refresh on auth errors
 - `IRMSlotChecker.run()` - Main polling loop
 
 ## Important Notes
 
-- **Cookie expiration**: Session cookies in `.env` will expire. When the script reports authentication errors, obtain new cookies from browser and update `.env`.
-- **Sensitive data**: Never commit `.env` file to git. It contains session cookies and Slack bot token.
+- **Automated login**: When `AUTO_LOGIN_ENABLED=true`, the script handles all authentication automatically using API calls. No manual cookie extraction needed.
+- **Cookie expiration**: With auto-login enabled, cookies are automatically refreshed on expiration. With manual mode, you must update cookies when they expire.
+- **Sensitive data**: Never commit `.env` file to git. It contains email/password credentials (if using auto-login), session cookies, and Slack bot token.
+- **API-based authentication**: The login process uses direct HTTP requests with ASP.NET ViewState extraction. Fast, lightweight, and no browser dependencies.
 - **Logs**: The `irm_slots.log` file will grow over time. Consider rotating or cleaning it periodically.
 - **Patient-specific**: Configuration is specific to a particular patient and appointment type. Update `EXAM_TYPE_ID`, `EXAM_ID`, and `PATIENT_BIRTH_DATE` as needed.
 - **Slack rate limits**: The script sends one Slack notification when slots are found and then stops. No rate limiting is needed.

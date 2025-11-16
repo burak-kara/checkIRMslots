@@ -5,17 +5,19 @@ A Python application that monitors appointment availability on easydoct.com for 
 ## Features
 
 - 🔄 Automated polling of appointment availability
+- 🔐 Automated login with session management (no manual cookie extraction!)
 - 📱 Slack notifications with formatted messages
 - 📊 Configurable polling intervals
 - 📝 Detailed logging (console + file)
-- 🔐 Secure configuration via environment variables
+- 🔧 Secure configuration via environment variables
 - ⚡ Type-safe code with full type hints
+- 🔄 Automatic session refresh when cookies expire
 
 ## Prerequisites
 
 - Python 3.8 or higher
 - A Slack workspace with permissions to create apps
-- Access to easydoct.com with valid session cookies
+- Access to easydoct.com account (email/password)
 
 ## Installation
 
@@ -44,12 +46,32 @@ A Python application that monitors appointment availability on easydoct.com for 
 
 2. **Edit `.env` and configure the following**:
 
-### Required Settings
+### Authentication Mode
 
-**API & Session Cookies** (obtain from browser session on easydoct.com):
+Choose between **automated login** (recommended) or **manual cookie** mode:
+
+**Option 1: Automated Login (Recommended)**
+
+Set `AUTO_LOGIN_ENABLED=true` and configure:
+- `EASYDOCT_EMAIL` - Your easydoct.com email
+- `EASYDOCT_PASSWORD` - Your easydoct.com password
+- `EXAM_URL` - Direct URL to your exam booking page
+
+Benefits:
+- ✅ No manual cookie extraction needed
+- ✅ Automatic session refresh when cookies expire
+- ✅ More reliable for long-running monitoring
+
+**Option 2: Manual Cookies**
+
+Set `AUTO_LOGIN_ENABLED=false` and configure:
 - `SESSION_KEY` - Your session key
 - `USER_SESSION_KEY` - User session key (usually "N")
 - `ASPNET_COOKIES` - ASP.NET authentication cookie
+
+Note: You'll need to manually update cookies when they expire. See "Getting Session Cookies" section below.
+
+### Required Settings (Both Modes)
 
 **Appointment Parameters**:
 - `EXAM_TYPE_ID` - The type of medical exam (e.g., "3374")
@@ -100,14 +122,14 @@ To receive Slack notifications:
 
 **Normal mode:**
 ```bash
-python IRMslots.py
+python src/main.py
 ```
 
 **Debug mode (for development/troubleshooting):**
 ```bash
-python IRMslots.py --debug
+python src/main.py --debug
 # or use short form:
-python IRMslots.py -d
+python src/main.py -d
 ```
 
 **Available options:**
@@ -130,7 +152,11 @@ To stop the checker manually, press `Ctrl+C`.
 - Understanding configuration loading
 - During development
 
-## Getting Session Cookies
+## Getting Session Cookies (Manual Mode Only)
+
+**Note**: If you're using automated login (`AUTO_LOGIN_ENABLED=true`), you can skip this section entirely. The application will handle login and cookie management automatically.
+
+For manual cookie mode (`AUTO_LOGIN_ENABLED=false`):
 
 1. Open your browser and go to easydoct.com
 2. Log in and navigate to the appointment booking page
@@ -174,7 +200,7 @@ Logs are written to:
 
 💡 **Tip**: Run with `--debug` flag for detailed logging to help diagnose issues:
 ```bash
-python IRMslots.py --debug
+python src/main.py --debug
 ```
 
 **Configuration errors**:
@@ -182,8 +208,16 @@ python IRMslots.py --debug
 - Check that there are no typos in variable names
 
 **HTTP errors (401, 403)**:
-- Your session cookies have expired
-- Obtain fresh cookies from your browser
+- If using automated login: The script will automatically attempt to re-login
+- If using manual cookies: Your session cookies have expired - obtain fresh ones from your browser
+- Check your email/password if auto-login repeatedly fails
+
+**Automated login failures**:
+- Ensure Chrome/Chromium is installed on your system
+- Verify your `EASYDOCT_EMAIL` and `EASYDOCT_PASSWORD` are correct
+- Check that `EXAM_URL` points to the correct exam booking page
+- Try running with `--debug` to see detailed browser automation logs
+- If ChromeDriver issues occur, try: `pip install webdriver-manager`
 
 **Slack notification failures**:
 - Verify your bot token is correct
@@ -200,8 +234,12 @@ python IRMslots.py --debug
 
 ```
 checkIRMslots/
-├── IRMslots.py          # Main application
-├── notifications.py     # Slack notification handler
+├── src/
+│   ├── main.py          # Main application
+│   ├── auth.py          # Automated login handler
+│   ├── notifications.py # Slack notification handler
+│   └── debug/           # Debug utilities
+│       └── debug_page.py # Page structure inspector
 ├── requirements.txt     # Python dependencies
 ├── .env.example        # Configuration template
 ├── .env               # Your configuration (git-ignored)
@@ -216,6 +254,7 @@ checkIRMslots/
 ⚠️ **Never commit your `.env` file to version control!**
 
 The `.env` file contains sensitive information:
+- Email/password credentials (if using automated login)
 - Session cookies
 - Slack bot token
 - Personal patient information

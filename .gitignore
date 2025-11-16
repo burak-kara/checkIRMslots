@@ -30,3 +30,10 @@ Thumbs.db
 
 # AI files
 .claude
+
+# Debug output
+src/debug/page_source.html
+src/debug/page_screenshot.png
+page_source.html
+page_screenshot.png
+test_output*.log

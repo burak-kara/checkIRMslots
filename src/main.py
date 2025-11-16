@@ -11,6 +11,7 @@ import requests
 from dotenv import load_dotenv
 
 from notifications import NotificationService
+from auth import get_session_cookies, SessionCookies
 
 
 @dataclass
@@ -18,9 +19,9 @@ class Config:
     """Configuration for IRM appointment slot checker."""
     # API Configuration
     api_url: str
-    session_key: str
-    user_session_key: str
-    aspnet_cookies: str
+    session_key: Optional[str]
+    user_session_key: Optional[str]
+    aspnet_cookies: Optional[str]
 
     # Appointment Parameters
     exam_type_id: str
@@ -39,23 +40,57 @@ class Config:
     slack_token: Optional[str] = None
     slack_channel_id: Optional[str] = None
 
+    # Automated Login Configuration
+    auto_login_enabled: bool = False
+    easydoct_email: Optional[str] = None
+    easydoct_password: Optional[str] = None
+    exam_url: Optional[str] = None
+
     @classmethod
     def from_env(cls) -> 'Config':
         """Load configuration from environment variables."""
         load_dotenv()
 
-        # Required fields
-        required_fields = {
+        config_dict: Dict[str, Any] = {}
+
+        # Check if auto-login is enabled
+        auto_login_enabled = os.getenv('AUTO_LOGIN_ENABLED', 'false').lower() == 'true'
+        config_dict['auto_login_enabled'] = auto_login_enabled
+
+        # Always required fields
+        always_required = {
             'API_URL': 'api_url',
-            'SESSION_KEY': 'session_key',
-            'USER_SESSION_KEY': 'user_session_key',
-            'ASPNET_COOKIES': 'aspnet_cookies',
             'EXAM_TYPE_ID': 'exam_type_id',
             'EXAM_ID': 'exam_id',
             'PATIENT_BIRTH_DATE': 'patient_birth_date',
         }
 
-        config_dict: Dict[str, Any] = {}
+        # Conditionally required fields
+        if auto_login_enabled:
+            # If auto-login is enabled, require login credentials
+            required_fields = {
+                **always_required,
+                'EASYDOCT_EMAIL': 'easydoct_email',
+                'EASYDOCT_PASSWORD': 'easydoct_password',
+                'EXAM_URL': 'exam_url',
+            }
+            # Cookies are optional, will be auto-generated
+            config_dict['session_key'] = os.getenv('SESSION_KEY')
+            config_dict['user_session_key'] = os.getenv('USER_SESSION_KEY')
+            config_dict['aspnet_cookies'] = os.getenv('ASPNET_COOKIES')
+        else:
+            # If auto-login is disabled, require manual cookies
+            required_fields = {
+                **always_required,
+                'SESSION_KEY': 'session_key',
+                'USER_SESSION_KEY': 'user_session_key',
+                'ASPNET_COOKIES': 'aspnet_cookies',
+            }
+            # Login credentials are optional
+            config_dict['easydoct_email'] = os.getenv('EASYDOCT_EMAIL')
+            config_dict['easydoct_password'] = os.getenv('EASYDOCT_PASSWORD')
+            config_dict['exam_url'] = os.getenv('EXAM_URL')
+
         missing_fields: List[str] = []
 
         for env_var, field_name in required_fields.items():
@@ -65,7 +100,10 @@ class Config:
             config_dict[field_name] = value
 
         if missing_fields:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing_fields)}")
+            mode = "auto-login" if auto_login_enabled else "manual cookie"
+            raise ValueError(
+                f"Missing required environment variables for {mode} mode: {', '.join(missing_fields)}"
+            )
 
         # Optional fields with defaults
         config_dict['poll_interval'] = int(os.getenv('POLL_INTERVAL_SECONDS', '60'))
@@ -130,6 +168,47 @@ class IRMSlotChecker:
             slack_channel_id=config.slack_channel_id,
             enabled=config.notifications_enabled
         )
+        self._login_attempted = False
+
+    def _perform_auto_login(self) -> bool:
+        """
+        Perform automated login and update session cookies.
+
+        Returns:
+            True if login successful, False otherwise
+        """
+        if not self.config.auto_login_enabled:
+            self.logger.warning("Auto-login is not enabled")
+            return False
+
+        if not all([self.config.easydoct_email, self.config.easydoct_password, self.config.exam_url]):
+            self.logger.error("Auto-login enabled but credentials are missing")
+            return False
+
+        self.logger.info("Attempting automated login...")
+
+        try:
+            cookies = get_session_cookies(
+                email=self.config.easydoct_email,
+                password=self.config.easydoct_password,
+                exam_url=self.config.exam_url,
+                headless=True
+            )
+
+            if cookies and cookies.is_valid():
+                # Update config with new cookies
+                self.config.session_key = cookies.session_key
+                self.config.user_session_key = cookies.user_session_key
+                self.config.aspnet_cookies = cookies.aspnet_cookies
+                self.logger.info("Automated login successful - session cookies updated")
+                return True
+            else:
+                self.logger.error("Automated login failed - could not retrieve valid cookies")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Error during automated login: {e}")
+            return False
 
     def check_availability(self) -> bool:
         """Check for available appointment slots."""
@@ -140,6 +219,32 @@ class IRMSlotChecker:
                 json=self.config.get_payload(),
                 timeout=30
             )
+
+            # Handle authentication errors
+            if response.status_code in (401, 403):
+                self.logger.warning(f"Authentication error {response.status_code} - session may have expired")
+
+                # Attempt auto-login if enabled and not already attempted this cycle
+                if self.config.auto_login_enabled and not self._login_attempted:
+                    self._login_attempted = True
+                    if self._perform_auto_login():
+                        self.logger.info("Retrying request with new session cookies...")
+                        # Retry the request with new cookies
+                        response = requests.post(
+                            self.config.api_url,
+                            headers=self.config.get_headers(),
+                            json=self.config.get_payload(),
+                            timeout=30
+                        )
+                        # Reset flag after successful retry
+                        if response.status_code == 200:
+                            self._login_attempted = False
+                    else:
+                        self.logger.error("Auto-login failed - cannot continue")
+                        return False
+                else:
+                    self.logger.error("Session expired and auto-login not available")
+                    return False
 
             if response.status_code != 200:
                 self.logger.error(f"HTTP error {response.status_code}")
@@ -225,9 +330,9 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python IRMslots.py              # Run with default settings from .env
-  python IRMslots.py --debug      # Run with debug logging enabled
-  python IRMslots.py -d           # Same as --debug (short form)
+  python src/main.py              # Run with default settings from .env
+  python src/main.py --debug      # Run with debug logging enabled
+  python src/main.py -d           # Same as --debug (short form)
         """
     )
 
@@ -256,6 +361,26 @@ def main() -> None:
 
         # Setup logging
         setup_logging(config)
+
+        # Perform initial login if auto-login is enabled and cookies not valid
+        # Check for placeholder values or missing cookies
+        has_valid_cookies = (
+            config.session_key and
+            config.user_session_key and
+            config.aspnet_cookies and
+            config.session_key != 'your_session_key_here' and
+            config.aspnet_cookies != 'your_aspnet_cookies_here'
+        )
+
+        if config.auto_login_enabled and not has_valid_cookies:
+            logger = logging.getLogger(__name__)
+            logger.info("Auto-login enabled and no valid cookies found - performing initial login...")
+            checker_temp = IRMSlotChecker(config)
+            if not checker_temp._perform_auto_login():
+                logger.error("Initial login failed - cannot start checker")
+                sys.exit(1)
+            # Use the updated config with cookies
+            config = checker_temp.config
 
         # Create and run checker
         checker = IRMSlotChecker(config)
