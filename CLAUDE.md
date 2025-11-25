@@ -94,6 +94,7 @@ Always required variables:
 
 Optional variables:
 
+- `MIN_DATE`: Minimum date for appointment search in `YYYYMMDD` format (e.g., `20251125`). If not specified, defaults to today's date.
 - `POLL_INTERVAL_SECONDS`: How often to check (default: 60)
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `NOTIFICATIONS_ENABLED`: Enable/disable Slack notifications (default: true)

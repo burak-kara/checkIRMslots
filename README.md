@@ -90,6 +90,7 @@ Note: You'll need to manually update cookies when they expire. See "Getting Sess
 
 ### Optional Settings
 
+- `MIN_DATE` - Minimum date for appointment search in `YYYYMMDD` format (e.g., "20251125"). If not specified, defaults to today's date.
 - `POLL_INTERVAL_SECONDS` - How often to check for slots (default: 60)
 - `LOG_LEVEL` - Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
 - `LOG_FILE` - Log file location (default: irm_slots.log)

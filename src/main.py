@@ -40,6 +40,9 @@ class Config:
     notifications_enabled: bool
 
     # Optional Fields (with defaults)
+    # Appointment Search Parameters
+    min_date: Optional[str] = None
+
     # Auto-resolution Parameters
     exam_name: Optional[str] = None
     location_name: Optional[str] = None
@@ -132,6 +135,7 @@ class Config:
         config_dict['poll_interval'] = int(os.getenv('POLL_INTERVAL_SECONDS', '60'))
         config_dict['log_level'] = os.getenv('LOG_LEVEL', 'INFO')
         config_dict['log_file'] = os.getenv('LOG_FILE', 'irm_slots.log')
+        config_dict['min_date'] = os.getenv('MIN_DATE')
 
         # Notification configuration
         config_dict['notifications_enabled'] = os.getenv('NOTIFICATIONS_ENABLED', 'true').lower() == 'true'
@@ -195,9 +199,12 @@ class Config:
 
     def get_payload(self) -> Dict[str, Any]:
         """Build request payload."""
+        # Use MIN_DATE from env if provided, otherwise use today's date
+        min_date = self.min_date if self.min_date else datetime.today().strftime("%Y%m%d")
+
         return {
             "examTypeId": self.exam_type_id,
-            "minDate": datetime.today().strftime("%Y%m%d"),
+            "minDate": min_date,
             "examId": self.exam_id,
             "examSetId": None,
             "practitionerId": None,

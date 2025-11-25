@@ -166,14 +166,14 @@ class RealSlackNotificationIntegrationTests(unittest.TestCase):
             enabled=True
         )
 
-        # Send REAL notification to Slack
+        # Send REAL TEST notification to Slack
         notification_service.send(
-            f"Found {availability_count} available appointment slot(s)!",
+            f"[TEST] Found {availability_count} available appointment slot(s)!",
             data_to_send
         )
 
-        # If we reach here, notification was sent successfully
-        print(f"\n[OK] Real Slack notification sent! Slots found: {availability_count}")
+        # If we reach here, test notification was sent successfully
+        print(f"\n[OK] Real TEST Slack notification sent! Slots found: {availability_count}")
         self.assertTrue(True)
 
     def test_send_real_slack_notification_with_multiple_appointments(self) -> None:
@@ -251,13 +251,13 @@ class RealSlackNotificationIntegrationTests(unittest.TestCase):
             enabled=True
         )
 
-        # Send REAL notification
+        # Send REAL TEST notification
         notification_service.send(
-            f"Found {availability_count} available appointment slot(s)!",
+            f"[TEST] Found {availability_count} available appointment slot(s)!",
             data_to_send
         )
 
-        print(f"\n[OK] Real Slack notification sent! Slots found: {availability_count}")
+        print(f"\n[OK] Real TEST Slack notification sent! Slots found: {availability_count}")
         print(f"   (Should show 5 slots + '...and 1 more' due to truncation)")
         self.assertTrue(True)
 
@@ -303,14 +303,15 @@ class RealSlackNotificationIntegrationTests(unittest.TestCase):
         )
 
         notification_service.send(
-            f"Found {availability_count} available appointment slot(s)!",
+            f"[TEST] Found {availability_count} available appointment slot(s)!",
             data_to_send
         )
 
-        print(f"\n[OK] Real Slack notification sent! Slots found: {availability_count}")
+        print(f"\n[OK] Real TEST Slack notification sent! Slots found: {availability_count}")
         self.assertTrue(True)
 
 
 if __name__ == "__main__":
     unittest.main()
+
 
