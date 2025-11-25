@@ -302,11 +302,35 @@ class IRMSlotChecker:
 
             data = response.json()
             availability_count = data.get("availabilityCount", 0)
+            appointments = data.get("appointments")
+            availability_lines = data.get("availabilityLines", [])
+
+            if availability_count == 0 and appointments:
+                # Fallback for responses that only include an appointments array
+                availability_count = len([
+                    appt for appt in appointments
+                    if isinstance(appt, dict)
+                ])
+                if availability_count:
+                    data["availabilityCount"] = availability_count
+
+            if not availability_lines and appointments:
+                availability_lines = []
+                for appt in appointments:
+                    if not isinstance(appt, dict):
+                        continue
+                    day_label = appt.get("dayAbbr") or appt.get("day")
+                    time_label = appt.get("startTime") or appt.get("start")
+                    if day_label and time_label:
+                        availability_lines.append(f"{day_label} {time_label}")
+                if availability_lines:
+                    data["availabilityLines"] = availability_lines
+            else:
+                availability_lines = data.get("availabilityLines", [])
 
             if availability_count > 0:
                 self.logger.info(f"Appointments are available! Count: {availability_count}")
 
-                availability_lines = data.get("availabilityLines", [])
                 for line in availability_lines:
                     self.logger.info(f" - {line}")
 
@@ -334,9 +358,7 @@ class IRMSlotChecker:
         try:
             while True:
                 if self.check_availability():
-                    self.logger.info("Appointment found! Stopping checker.")
-                    break
-
+                    self.logger.info("Appointment found! Continuing to monitor for additional availability.")
                 time.sleep(self.config.poll_interval)
 
         except KeyboardInterrupt:
