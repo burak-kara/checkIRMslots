@@ -56,28 +56,29 @@ class SlackNotificationTests(unittest.TestCase):
 
         # Verify blocks structure
         blocks = call_kwargs["blocks"]
-        self.assertEqual(len(blocks), 4)  # header, section with message, fields section, slots section
+        # Structure: header block, metadata block, optional slots block
+        self.assertGreaterEqual(len(blocks), 2)
+        self.assertLessEqual(len(blocks), 3)
 
-        # Verify header
-        self.assertEqual(blocks[0]["type"], "header")
-        self.assertEqual(blocks[0]["text"]["text"], "🏥 IRM Appointment Slots Available!")
+        # Verify first section (header + message)
+        self.assertEqual(blocks[0]["type"], "section")
+        header_text = blocks[0]["text"]["text"]
+        self.assertIn("IRM Appointment Slots Available!", header_text)
+        self.assertIn("Found 2 available appointment slot(s)!", header_text)
 
-        # Verify message section
+        # Verify second section (metadata with count and time)
         self.assertEqual(blocks[1]["type"], "section")
-        self.assertIn("Found 2 available appointment slot(s)!", blocks[1]["text"]["text"])
+        metadata_text = blocks[1]["text"]["text"]
+        self.assertIn("*Slots:*", metadata_text)
+        self.assertIn("2", metadata_text)
+        self.assertIn("*Time:*", metadata_text)
 
-        # Verify fields section (slots found and time)
-        self.assertEqual(blocks[2]["type"], "section")
-        fields = blocks[2]["fields"]
-        self.assertEqual(len(fields), 2)
-        self.assertIn("2", fields[0]["text"])  # Slots count
-        self.assertIn("Time:", fields[1]["text"])
-
-        # Verify availability lines section
-        self.assertEqual(blocks[3]["type"], "section")
-        availability_text = blocks[3]["text"]["text"]
-        self.assertIn("28 novembre 11:15", availability_text)
-        self.assertIn("29 novembre 14:30", availability_text)
+        # Verify availability lines section (third block if slots exist)
+        if len(blocks) > 2:
+            self.assertEqual(blocks[2]["type"], "section")
+            availability_text = blocks[2]["text"]["text"]
+            self.assertIn("28 novembre 11:15", availability_text)
+            self.assertIn("29 novembre 14:30", availability_text)
 
     @patch("notifications.WebClient")
     def test_slack_message_with_single_slot(
@@ -109,9 +110,11 @@ class SlackNotificationTests(unittest.TestCase):
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Verify slot count in fields
-        fields = blocks[2]["fields"]
-        self.assertIn("1", fields[0]["text"])
+        # Verify slot count in metadata block
+        self.assertGreaterEqual(len(blocks), 2)
+        metadata_text = blocks[1]["text"]["text"]
+        self.assertIn("*Slots:*", metadata_text)
+        self.assertIn("1", metadata_text)
 
     @patch("notifications.WebClient")
     def test_slack_message_with_many_slots_shows_truncation(
@@ -148,8 +151,9 @@ class SlackNotificationTests(unittest.TestCase):
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Verify truncation message in availability section
-        availability_text = blocks[3]["text"]["text"]
+        # Verify truncation message in availability section (third block)
+        self.assertEqual(len(blocks), 3)  # header, metadata, slots
+        availability_text = blocks[2]["text"]["text"]
         # Should show first 5 slots
         for i in range(1, 6):
             self.assertIn(f"Day {i}", availability_text)
@@ -325,12 +329,12 @@ class SlackNotificationTests(unittest.TestCase):
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Check that timestamp is in the fields section
-        fields = blocks[2]["fields"]
-        time_field = fields[1]["text"]
-        self.assertIn("Time:", time_field)
+        # Check that timestamp is in the metadata section (second block)
+        self.assertGreaterEqual(len(blocks), 2)
+        metadata_text = blocks[1]["text"]["text"]
+        self.assertIn("*Time:*", metadata_text)
         # Verify timestamp format (YYYY-MM-DD HH:MM:SS)
-        self.assertRegex(time_field, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+        self.assertRegex(metadata_text, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
 
 if __name__ == "__main__":

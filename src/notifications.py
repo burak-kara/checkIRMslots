@@ -62,69 +62,79 @@ class NotificationService:
             availability_data: Full availability data from API response
         """
         try:
+            # Slack has a 3000 character limit per text block
+            SLACK_TEXT_LIMIT = 3000
+
             # Extract availability lines for better formatting
             availability_lines = availability_data.get("availabilityLines", [])
             availability_count = availability_data.get("availabilityCount", 0)
 
-            # Build formatted message with blocks for better Slack presentation
-            blocks = [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "🏥 IRM Appointment Slots Available!",
-                        "emoji": True
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*{message}*"
-                    }
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Slots Found:*\n{availability_count}"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Time:*\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                        }
-                    ]
-                }
-            ]
+            # Build formatted message - use only text-based blocks to avoid validation issues
+            blocks = []
 
-            # Add availability details if present
+            # First block: header with message (truncate if needed)
+            header_text = f":hospital: *IRM Appointment Slots Available!*\n{message}"
+            if len(header_text) > SLACK_TEXT_LIMIT:
+                # Keep header and truncate message if needed
+                header_text = f":hospital: *IRM Appointment Slots Available!*\n{message[:SLACK_TEXT_LIMIT - 40]}"
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": header_text
+                }
+            })
+
+            # Second block: metadata (count and timestamp)
+            metadata_text = f"*Slots:* {availability_count} | *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": metadata_text
+                }
+            })
+
+            # Third block: availability details if present
             if availability_lines:
-                availability_text = "\n".join([f"• {line}" for line in availability_lines[:5]])
+                # Limit to first 5 slots
+                display_lines = availability_lines[:5]
+                availability_text = "\n".join([f"• {line}" for line in display_lines])
+
+                # Add indicator if there are more slots
                 if len(availability_lines) > 5:
-                    availability_text += f"\n_...and {len(availability_lines) - 5} more_"
+                    availability_text += f"\n_(and {len(availability_lines) - 5} more slots)_"
+
+                # Build slots block text and truncate if needed
+                slots_block_text = f"*Available Slots:*\n{availability_text}"
+                if len(slots_block_text) > SLACK_TEXT_LIMIT:
+                    # If too long, just show count of additional slots
+                    slots_block_text = f"*Available Slots:* {availability_count} total slots found"
 
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Available Slots:*\n{availability_text}"
+                        "text": slots_block_text
                     }
                 })
 
             # Send message using Slack API
+            self.logger.debug(f"Sending Slack message with {len(blocks)} blocks")
             response = self.slack_client.chat_postMessage(
                 channel=self.slack_channel_id,
                 text=message,  # Fallback text for notifications
                 blocks=blocks
             )
 
-            if response["ok"]:
+            if response.get("ok"):
                 self.logger.info(f"Slack notification sent successfully to channel {self.slack_channel_id}")
             else:
-                self.logger.error(f"Slack API returned ok=false: {response}")
+                self.logger.error(f"Slack API returned ok=false: {response.get('error', 'Unknown error')}")
 
         except SlackApiError as e:
-            self.logger.error(f"Slack API error: {e.response['error']}")
+            error_msg = e.response.get('error', 'Unknown Slack API error') if hasattr(e, 'response') else str(e)
+            self.logger.error(f"Slack API error: {error_msg}")
         except Exception as e:
             self.logger.error(f"Unexpected error sending Slack notification: {e}")
