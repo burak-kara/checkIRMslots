@@ -94,7 +94,8 @@ Always required variables:
 
 Optional variables:
 
-- `MIN_DATE`: Minimum date for appointment search in `YYYYMMDD` format (e.g., `20251125`). If not specified, defaults to today's date.
+- `MIN_DATE`: Minimum date for appointment search in `YYYYMMDD` format (e.g., `20251125`). If not specified, defaults to
+  today's date.
 - `POLL_INTERVAL_SECONDS`: How often to check (default: 60)
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `NOTIFICATIONS_ENABLED`: Enable/disable Slack notifications (default: true)
@@ -187,72 +188,72 @@ python3 -m unittest tests.test_integration_slack.RealSlackNotificationIntegratio
 **`tests/test_main.py` - IRMSlotCheckerAvailabilityTests (10 tests):**
 
 - **Appointment Detection & Notifications**:
-  - Finding available slots and sending Slack notifications
-  - Handling API responses with `availabilityCount` and `appointments` array formats
-  - Multiple appointment slots with correct count formatting
+    - Finding available slots and sending Slack notifications
+    - Handling API responses with `availabilityCount` and `appointments` array formats
+    - Multiple appointment slots with correct count formatting
 
 - **Authentication & Session Management**:
-  - Automatic session refresh on 401/403 authentication errors
-  - Auto-login retry with new cookies after auth failure
-  - Proper header construction with updated session cookies
+    - Automatic session refresh on 401/403 authentication errors
+    - Auto-login retry with new cookies after auth failure
+    - Proper header construction with updated session cookies
 
 - **Notification Behavior**:
-  - Skipping notifications when no slots available
-  - Respecting `NOTIFICATIONS_ENABLED=false` flag
-  - NotificationService initialization with correct Slack credentials
-  - Proper message formatting with accurate slot counts
+    - Skipping notifications when no slots available
+    - Respecting `NOTIFICATIONS_ENABLED=false` flag
+    - NotificationService initialization with correct Slack credentials
+    - Proper message formatting with accurate slot counts
 
 - **Error Handling**:
-  - Network request exceptions handling
-  - HTTP 403 (Forbidden) error handling
-  - Graceful failure without sending notifications on errors
+    - Network request exceptions handling
+    - HTTP 403 (Forbidden) error handling
+    - Graceful failure without sending notifications on errors
 
 **`tests/test_notifications.py` - SlackNotificationTests (10 tests):**
 
 - **Slack Message Formatting**:
-  - Sends properly formatted Slack messages with blocks (header, message, fields, slots)
-  - Includes correct slot counts and timestamps
-  - Truncates slot lists at 5 items with "...and X more" indicator
+    - Sends properly formatted Slack messages with blocks (header, message, fields, slots)
+    - Includes correct slot counts and timestamps
+    - Truncates slot lists at 5 items with "...and X more" indicator
 
 - **Slack API Integration**:
-  - Calls Slack WebClient `chat_postMessage` with correct parameters
-  - Verifies channel ID and fallback text
-  - Builds complete block structure with all details
+    - Calls Slack WebClient `chat_postMessage` with correct parameters
+    - Verifies channel ID and fallback text
+    - Builds complete block structure with all details
 
 - **Configuration Validation**:
-  - Skips sending if Slack token is missing
-  - Skips sending if channel ID is missing
-  - Does not initialize WebClient if no token provided
+    - Skips sending if Slack token is missing
+    - Skips sending if channel ID is missing
+    - Does not initialize WebClient if no token provided
 
 - **Error Handling**:
-  - Catches and logs SlackApiError exceptions
-  - Catches and logs unexpected exceptions
-  - Handles `ok=false` responses from Slack API
+    - Catches and logs SlackApiError exceptions
+    - Catches and logs unexpected exceptions
+    - Handles `ok=false` responses from Slack API
 
 **`tests/test_integration_slack.py` - RealSlackNotificationIntegrationTests (3 tests):**
 
 - **Real Slack Notification Delivery**:
-  - Sends actual messages to your configured Slack channel
-  - Uses exact API response format from easydoct documentation
-  - Loads credentials from `.env` file (SLACK_TOKEN and SLACK_CHANNEL_ID)
-  - Verifies complete message delivery workflow
+    - Sends actual messages to your configured Slack channel
+    - Uses exact API response format from easydoct documentation
+    - Loads credentials from `.env` file (SLACK_TOKEN and SLACK_CHANNEL_ID)
+    - Verifies complete message delivery workflow
 
 - **Test Scenarios**:
-  - Single appointment notification (1 slot)
-  - Multiple appointments with truncation (6 slots showing 5 + "...and 1 more")
-  - Minimal appointment data (only dayAbbr and startTime)
+    - Single appointment notification (1 slot)
+    - Multiple appointments with truncation (6 slots showing 5 + "...and 1 more")
+    - Minimal appointment data (only dayAbbr and startTime)
 
 - **Requirements**:
-  - Valid SLACK_TOKEN in `.env` (xoxb-... format)
-  - Valid SLACK_CHANNEL_ID in `.env` (C... format)
-  - Bot must be added to the Slack channel (invite the app to the channel)
-  - Bot must have `chat:write` OAuth scope permission
+    - Valid SLACK_TOKEN in `.env` (xoxb-... format)
+    - Valid SLACK_CHANNEL_ID in `.env` (C... format)
+    - Bot must be added to the Slack channel (invite the app to the channel)
+    - Bot must have `chat:write` OAuth scope permission
 
 - **Usage Notes**:
-  - These tests ACTUALLY send messages to your Slack channel
-  - Tests are skipped if credentials are not configured
-  - If you get "not_in_channel" error, add the bot to your Slack channel first
-  - Tests verify end-to-end notification workflow with real Slack API
+    - These tests ACTUALLY send messages to your Slack channel
+    - Tests are skipped if credentials are not configured
+    - If you get "not_in_channel" error, add the bot to your Slack channel first
+    - Tests verify end-to-end notification workflow with real Slack API
 
 ## Debug Utilities
 
@@ -399,65 +400,55 @@ to git.
 - **Slack rate limits**: The script sends one Slack notification when slots are found and then stops. No rate limiting
   is needed.
 
-## Example response for Available Appointments
+## Example API Response Structure
+
+The API returns appointment availability in the following nested structure:
 
 ```json
 {
-  "appointments": [
-    "None",
-    "None",
-    "None",
+  "availabilityLines": [
     {
-      "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-      "start": "2025-11-28T11:15:00",
-      "end": "2025-11-28T11:30:00",
-      "convocation": "2025-11-28T11:00:00",
-      "day": "2025-11-28T00:00:00",
-      "dayOfWeek": "vendredi",
-      "dayAbbr": "28 novembre",
-      "startTime": "11:15",
-      "endTime": "11:30",
-      "convocationTimeText": "(convocation à 11:00)",
-      "convocationTime": "11:00",
-      "officeId": 12345,
-      "officePlaceVisibleId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-      "officePlaceName": "EXAMPLE CLINIC - City Service Example Facility",
-      "officePlaceId": 67890,
-      "roomId": 11111,
-      "roomName": "MRI ROOM A",
-      "roomColor": "#F26C55",
-      "useRoomDurationForAllAppointment": "False",
-      "availablePractitioners": [
+      "appointments": [
         {
-          "id": 99999,
-          "firstNameLastName": "Dr. Example Name",
-          "lastNameFirstName": "None",
-          "isPractitionerSubstitute": "False",
-          "incumbentPractitionerId": "None",
-          "incumbentPractitionerLastNameFirstName": "None",
-          "practitionerInfoId": 0
-        }
-      ],
-      "practitionerId": 99999,
-      "practitionerFirstNameLastName": "Dr. Example Name",
-      "practitionerLastNameFirstName": "None",
-      "isPractitionerSubstitute": "False",
-      "examTypeId": 12345,
-      "examTypeName": "MRI GENERAL IMAGING",
-      "examId": 67890,
-      "examName": "Example MRI Scan",
-      "examNameForPatient": "Example MRI Scan",
-      "secondAvailableAppointment": "None",
-      "differentDayText": "None",
-      "emergency": "False",
-      "multiAvailabilityEmergency": "False",
-      "userScheduleName": "None",
-      "officePlace": "None",
-      "teleinterpretation": "False"
+          "id": "uuid-string",
+          "dayAbbr": "15 janvier",
+          "startTime": "14:00",
+          "officePlaceName": "Clinic Name - Department",
+          "examTypeId": 1234,
+          "examTypeName": "MRI Type Name",
+          "examId": 5678,
+          "examName": "Specific Exam Name"
+        },
+        null,
+        null
+      ]
     },
-    "None",
-    "None",
-    "None"
-  ]
+    {
+      "appointments": [
+        {
+          "id": "uuid-string",
+          "dayAbbr": "15 janvier",
+          "startTime": "14:15",
+          "officePlaceName": "Clinic Name - Department",
+          "examTypeId": 1234,
+          "examTypeName": "MRI Type Name",
+          "examId": 5678,
+          "examName": "Specific Exam Name"
+        },
+        null
+      ]
+    }
+  ],
+  "availabilityCount": 140
 }
 ```
+
+**Response Fields:**
+- `availabilityLines`: Array of time slots, each containing an `appointments` array with schedule details
+- `appointments`: Array with appointment objects at available indices and `null` at unavailable indices
+- `availabilityCount`: Total number of available appointments
+- `dayAbbr`: Formatted date (e.g., "15 janvier")
+- `startTime`: Appointment start time (e.g., "14:00")
+- `officePlaceName`: Clinical facility name and location
+- `examTypeName`: Type of medical examination
+- `examName`: Specific exam name

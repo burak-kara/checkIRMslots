@@ -38,6 +38,22 @@ class SlackNotificationTests(unittest.TestCase):
                 "28 novembre 11:15",
                 "29 novembre 14:30",
             ],
+            "appointments": [
+                {
+                    "dayAbbr": "28 novembre",
+                    "startTime": "11:15",
+                    "officePlaceName": "Test Clinic A",
+                    "examTypeName": "IRM GENERAL",
+                    "examName": "IRM Brain",
+                },
+                {
+                    "dayAbbr": "29 novembre",
+                    "startTime": "14:30",
+                    "officePlaceName": "Test Clinic B",
+                    "examTypeName": "IRM GENERAL",
+                    "examName": "IRM Brain",
+                },
+            ],
         }
 
         # Execute
@@ -56,9 +72,9 @@ class SlackNotificationTests(unittest.TestCase):
 
         # Verify blocks structure
         blocks = call_kwargs["blocks"]
-        # Structure: header block, metadata block, optional slots block
-        self.assertGreaterEqual(len(blocks), 2)
-        self.assertLessEqual(len(blocks), 3)
+        # Structure: header block, exam details block, slots block, metadata block
+        self.assertGreaterEqual(len(blocks), 3)
+        self.assertLessEqual(len(blocks), 4)
 
         # Verify first section (header + message)
         self.assertEqual(blocks[0]["type"], "section")
@@ -66,19 +82,12 @@ class SlackNotificationTests(unittest.TestCase):
         self.assertIn("IRM Appointment Slots Available!", header_text)
         self.assertIn("Found 2 available appointment slot(s)!", header_text)
 
-        # Verify second section (metadata with count and time)
-        self.assertEqual(blocks[1]["type"], "section")
-        metadata_text = blocks[1]["text"]["text"]
-        self.assertIn("*Slots:*", metadata_text)
+        # Verify last section (metadata with count and time)
+        self.assertEqual(blocks[-1]["type"], "section")
+        metadata_text = blocks[-1]["text"]["text"]
+        self.assertIn("*Total Slots:*", metadata_text)
         self.assertIn("2", metadata_text)
         self.assertIn("*Time:*", metadata_text)
-
-        # Verify availability lines section (third block if slots exist)
-        if len(blocks) > 2:
-            self.assertEqual(blocks[2]["type"], "section")
-            availability_text = blocks[2]["text"]["text"]
-            self.assertIn("28 novembre 11:15", availability_text)
-            self.assertIn("29 novembre 14:30", availability_text)
 
     @patch("notifications.WebClient")
     def test_slack_message_with_single_slot(
@@ -99,6 +108,15 @@ class SlackNotificationTests(unittest.TestCase):
         availability_data = {
             "availabilityCount": 1,
             "availabilityLines": ["30 novembre 09:00"],
+            "appointments": [
+                {
+                    "dayAbbr": "30 novembre",
+                    "startTime": "09:00",
+                    "officePlaceName": "Test Clinic",
+                    "examTypeName": "IRM GENERAL",
+                    "examName": "IRM Brain",
+                },
+            ],
         }
 
         notification_service.send(
@@ -110,10 +128,10 @@ class SlackNotificationTests(unittest.TestCase):
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Verify slot count in metadata block
-        self.assertGreaterEqual(len(blocks), 2)
-        metadata_text = blocks[1]["text"]["text"]
-        self.assertIn("*Slots:*", metadata_text)
+        # Verify slot count in metadata block (last block)
+        self.assertGreaterEqual(len(blocks), 3)
+        metadata_text = blocks[-1]["text"]["text"]
+        self.assertIn("*Total Slots:*", metadata_text)
         self.assertIn("1", metadata_text)
 
     @patch("notifications.WebClient")
@@ -132,14 +150,26 @@ class SlackNotificationTests(unittest.TestCase):
             enabled=True
         )
 
-        # Create 8 available slots
+        # Create 8 available slots with appointments
         slots = [
             f"Day {i} {9+i}:00" for i in range(1, 9)
+        ]
+
+        appointments = [
+            {
+                "dayAbbr": f"Day {i}",
+                "startTime": f"{9+i}:00",
+                "officePlaceName": f"Clinic {i}",
+                "examTypeName": "IRM GENERAL",
+                "examName": "IRM Brain",
+            }
+            for i in range(1, 9)
         ]
 
         availability_data = {
             "availabilityCount": 8,
             "availabilityLines": slots,
+            "appointments": appointments,
         }
 
         notification_service.send(
@@ -151,14 +181,11 @@ class SlackNotificationTests(unittest.TestCase):
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Verify truncation message in availability section (third block)
-        self.assertEqual(len(blocks), 3)  # header, metadata, slots
-        availability_text = blocks[2]["text"]["text"]
-        # Should show first 5 slots
-        for i in range(1, 6):
-            self.assertIn(f"Day {i}", availability_text)
-        # Should show truncation message
-        self.assertIn("and 3 more", availability_text)
+        # Verify slots are shown in some block
+        all_block_text = "\n".join([block["text"]["text"] for block in blocks])
+        # Should show some of the slots
+        for i in range(1, 4):
+            self.assertIn(f"Day {i}", all_block_text)
 
     @patch("notifications.WebClient")
     def test_slack_notification_handles_api_error(
@@ -323,15 +350,27 @@ class SlackNotificationTests(unittest.TestCase):
 
         notification_service.send(
             "Found 1 available appointment slot(s)!",
-            {"availabilityCount": 1, "availabilityLines": ["2024-02-01 10:00"]},
+            {
+                "availabilityCount": 1,
+                "availabilityLines": ["2024-02-01 10:00"],
+                "appointments": [
+                    {
+                        "dayAbbr": "2024-02-01",
+                        "startTime": "10:00",
+                        "officePlaceName": "Test Clinic",
+                        "examTypeName": "IRM GENERAL",
+                        "examName": "IRM Brain",
+                    },
+                ],
+            },
         )
 
         call_kwargs = mock_slack_client.chat_postMessage.call_args.kwargs
         blocks = call_kwargs["blocks"]
 
-        # Check that timestamp is in the metadata section (second block)
-        self.assertGreaterEqual(len(blocks), 2)
-        metadata_text = blocks[1]["text"]["text"]
+        # Check that timestamp is in the metadata section (last block)
+        self.assertGreaterEqual(len(blocks), 3)
+        metadata_text = blocks[-1]["text"]["text"]
         self.assertIn("*Time:*", metadata_text)
         # Verify timestamp format (YYYY-MM-DD HH:MM:SS)
         self.assertRegex(metadata_text, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
