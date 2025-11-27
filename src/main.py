@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import random
 import sys
 import time
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ class Config:
 
     # Polling Configuration
     poll_interval: int
+    poll_interval_jitter: int
 
     # Logging Configuration
     log_level: str
@@ -133,6 +135,7 @@ class Config:
 
         # Optional fields with defaults
         config_dict['poll_interval'] = int(os.getenv('POLL_INTERVAL_SECONDS', '60'))
+        config_dict['poll_interval_jitter'] = int(os.getenv('POLL_INTERVAL_JITTER_SECONDS', '10'))
         config_dict['log_level'] = os.getenv('LOG_LEVEL', 'INFO')
         config_dict['log_file'] = os.getenv('LOG_FILE', 'irm_slots.log')
         config_dict['min_date'] = os.getenv('MIN_DATE')
@@ -360,13 +363,27 @@ class IRMSlotChecker:
     def run(self) -> None:
         """Main loop to continuously check for availability."""
         self.logger.info("Starting IRM slot checker...")
-        self.logger.info(f"Checking every {self.config.poll_interval} seconds")
+        base_interval = self.config.poll_interval
+        jitter = self.config.poll_interval_jitter
+
+        if jitter > 0:
+            self.logger.info(f"Checking every {base_interval} ± {jitter} seconds (random intervals to avoid bot detection)")
+        else:
+            self.logger.info(f"Checking every {base_interval} seconds")
 
         try:
             while True:
                 if self.check_availability():
                     self.logger.info("Appointment found! Continuing to monitor for additional availability.")
-                time.sleep(self.config.poll_interval)
+
+                # Calculate randomized sleep interval
+                if jitter > 0:
+                    sleep_interval = random.uniform(base_interval - jitter, base_interval + jitter)
+                    self.logger.debug(f"Next check in {sleep_interval:.1f} seconds")
+                else:
+                    sleep_interval = base_interval
+
+                time.sleep(sleep_interval)
 
         except KeyboardInterrupt:
             self.logger.info("Checker stopped by user")

@@ -96,7 +96,10 @@ Optional variables:
 
 - `MIN_DATE`: Minimum date for appointment search in `YYYYMMDD` format (e.g., `20251125`). If not specified, defaults to
   today's date.
-- `POLL_INTERVAL_SECONDS`: How often to check (default: 60)
+- `POLL_INTERVAL_SECONDS`: How often to check in seconds (default: 60)
+- `POLL_INTERVAL_JITTER_SECONDS`: Randomization amount for polling intervals in seconds (default: 10). Adds randomness to
+  avoid bot detection. The actual interval will be: `POLL_INTERVAL_SECONDS ± POLL_INTERVAL_JITTER_SECONDS` (e.g., 60 ± 10
+  means checks happen at random intervals between 50-70 seconds). Set to 0 to disable randomization.
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `NOTIFICATIONS_ENABLED`: Enable/disable Slack notifications (default: true)
 - `SLACK_TOKEN`: Slack Bot User OAuth Token (starts with xoxb-)
@@ -399,6 +402,10 @@ to git.
   `EXAM_ID`, and `PATIENT_BIRTH_DATE` as needed.
 - **Slack rate limits**: The script sends one Slack notification when slots are found and then stops. No rate limiting
   is needed.
+- **Bot detection avoidance**: By default, the polling interval includes randomization (60 ± 10 seconds) to appear less
+  like a bot. You can adjust `POLL_INTERVAL_JITTER_SECONDS` to increase/decrease the randomness, or set it to 0 to disable.
+  Higher jitter values make the polling pattern less predictable. This helps avoid being rate-limited or blocked by the
+  target API.
 
 ## Example API Response Structure
 
